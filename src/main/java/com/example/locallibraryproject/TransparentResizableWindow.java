@@ -79,7 +79,6 @@ public class TransparentResizableWindow extends Application {
                         // Добавляем иконку PDF в корневую панель
 //                        root.getChildren().add(pdfIcon);
                     }
-
                 }
             }
         });
