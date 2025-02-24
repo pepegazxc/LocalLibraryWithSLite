@@ -1,5 +1,6 @@
 package com.example.locallibraryproject;
 
+import javafx.scene.control.Label;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.*;
 import javafx.application.Application;
@@ -17,7 +18,10 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
+import java.awt.*;
+import java.awt.event.MouseEvent;
 import java.io.File;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -52,34 +56,64 @@ public class TransparentResizableWindow extends Application {
 
         // Кнопка добавления новой книги
         Button addButton = new Button("Add new book");
-        addButton.setOnAction(new EventHandler<ActionEvent>() {
-            @Override
-            public void handle(ActionEvent actionEvent) {
-                FileChooser fileChooser = new FileChooser();
-                File selectFile = fileChooser.showOpenDialog(stage);
+        addButton.setOnAction(actionEvent -> {
+            FileChooser fileChooser = new FileChooser();
+            File selectFile = fileChooser.showOpenDialog(stage);
 
-                if (selectFile != null) {
-                    String filePath = selectFile.getAbsolutePath();
-                    saveFilePathToDatabase(filePath);
+            if (selectFile != null) {
+                String filePath = selectFile.getAbsolutePath();
+                String fileName = selectFile.getName();
+                String bookTitle = fileName.substring(0, fileName.lastIndexOf('.'));
 
-                    if (filePath.endsWith(".png") || filePath.endsWith(".jpg") || filePath.endsWith(".jpeg") || filePath.endsWith(".gif")) {
-                        Image coverImage = new Image("file:" + filePath);
-                        ImageView coverImageView = new ImageView(coverImage);
-                        coverImageView.setFitWidth(300);  // Устанавливаем размеры изображения
-                        coverImageView.setFitHeight(400);
-
-                        // Добавляем изображение в корневую панель
-                        root.getChildren().add(coverImageView);
-                    } else if (filePath.endsWith(".pdf")) {
-                        // Для PDF показываем иконку
-                        // Используем Material Design Icon для PDF
-//                        MaterialIconView pdfIcon = new MaterialIconView(MaterialIcon.FILE_PDF);  // Иконка PDF
-//                        pdfIcon.setSize("50px");  // Устанавливаем размер иконки
-
-                        // Добавляем иконку PDF в корневую панель
-//                        root.getChildren().add(pdfIcon);
-                    }
+                // Создаем контейнер для иконок и текста, если его нет
+                HBox hBoxForIcons = (HBox) root.lookup("#hBoxForIcons");
+                if (hBoxForIcons == null) {
+                    hBoxForIcons = new HBox(10);
+                    hBoxForIcons.setId("hBoxForIcons");
+                    hBoxForIcons.setLayoutX(50);  // Начальная позиция X
+                    hBoxForIcons.setLayoutY(50);  // Начальная позиция Y
+                    hBoxForIcons.setAlignment(Pos.TOP_RIGHT);
+                    hBoxForIcons.setSpacing(20);
+                    root.getChildren().add(hBoxForIcons);
                 }
+
+                // Создание контейнера для иконки и текста
+                VBox bookItemContainer = new VBox(5);
+                bookItemContainer.setAlignment(Pos.CENTER);
+
+                // Добавление иконки PDF
+                if (filePath.endsWith(".pdf")) {
+                    Image coverImage = new Image("file:C:/ForProjects/pdf-icon.png"); // Путь к иконке PDF
+                    ImageView coverImageView = new ImageView(coverImage);
+
+                    coverImageView.setFitWidth(100);  // Устанавливаем ширину
+                    coverImageView.setFitHeight(100); // Устанавливаем высоту
+
+                    // Создаем кнопку для удаления ярлыка
+                    Button deleteButton = new Button("Delete");
+                    deleteButton.setStyle("-fx-background-color: red; -fx-text-fill: white;");
+                    HBox finalHBoxForIcons = hBoxForIcons;
+                    deleteButton.setOnAction(e -> {
+                        // Удаляем иконку и название книги
+                        finalHBoxForIcons.getChildren().remove(bookItemContainer);
+                        // Удаляем путь из базы данных
+                        deleteFilePathFromDatabase(filePath);
+                    });
+
+
+                    // Убедимся, что обработчик кликов только на иконке
+                    coverImageView.setOnMouseClicked(mouseEvent -> openBook(selectFile));
+
+                    // Создание текста с названием книги
+                    Label bookTitleLabel = new Label(bookTitle);
+                    bookTitleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 14px;");
+
+                    // Добавляем иконку, текст и кнопку удаления в контейнер
+                    bookItemContainer.getChildren().addAll(coverImageView, bookTitleLabel, deleteButton);
+                }
+
+                // Добавляем контейнер в hBoxForIcons
+                hBoxForIcons.getChildren().add(bookItemContainer);
             }
         });
 
@@ -138,6 +172,35 @@ public class TransparentResizableWindow extends Application {
             System.err.println(e.getMessage());
         }
     }
+    private void deleteFilePathFromDatabase(String filePath) {
+        String url = "jdbc:sqlite:C:/sqlite/LocalLibrary.db"; // Путь к базе данных
+        String sql = "DELETE FROM files WHERE path = ?;";
+
+        try (Connection conn = DriverManager.getConnection(url);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, filePath);
+            pstmt.executeUpdate();
+            System.out.println("Путь успешно удален из базы данных: " + filePath);
+        } catch (SQLException e) {
+            System.err.println("Ошибка при удалении пути из базы данных: " + e.getMessage());
+        }
+    }
+
+    private void openBook(File bookFile) {
+        try {
+            if (bookFile.getName().endsWith(".pdf")) {
+                Desktop desktop = Desktop.getDesktop();
+                desktop.open(bookFile);  // Открывает PDF с помощью дефолтного приложения
+            } else {
+                // Для изображений или других типов файлов можно добавить обработку
+                System.out.println("Это не PDF, но можно добавить обработку для других типов.");
+            }
+        } catch (IOException e) {
+            System.err.println("Ошибка при открытии книги: " + e.getMessage());
+        }
+    }
+
 
     // Метод для перетаскивания окна
     private void makeWindowDraggable(StackPane root, Stage stage) {
